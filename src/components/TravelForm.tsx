@@ -1,17 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TravelPlan } from '@/lib/planner'
 
 export default function TravelForm() {
   const [loading, setLoading] = useState(false)
   const [plan, setPlan] = useState<TravelPlan | null>(null)
   const [error, setError] = useState('')
+  const [history, setHistory] = useState<TravelPlan[]>([])
+  const [showHistory, setShowHistory] = useState(false)
 
   const [destination, setDestination] = useState('')
   const [days, setDays] = useState(3)
   const [budget, setBudget] = useState(2000)
   const [preferences, setPreferences] = useState<string[]>([])
+  const [startDate, setStartDate] = useState('')
 
   const preferenceOptions = [
     '自然风光',
@@ -46,6 +49,13 @@ export default function TravelForm() {
 
       const data = await res.json()
       setPlan(data)
+      
+      // 保存到历史
+      const saved = localStorage.getItem('travelHistory')
+      const history = saved ? JSON.parse(saved) : []
+      history.unshift(data)
+      localStorage.setItem('travelHistory', JSON.stringify(history.slice(0, 10)))
+      setHistory(history.slice(0, 10))
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败')
     } finally {
@@ -61,8 +71,88 @@ export default function TravelForm() {
     )
   }
 
+  const loadHistory = () => {
+    const saved = localStorage.getItem('travelHistory')
+    if (saved) {
+      setHistory(JSON.parse(saved))
+      setShowHistory(true)
+    }
+  }
+
+  const clearHistory = () => {
+    localStorage.removeItem('travelHistory')
+    setHistory([])
+  }
+
+  const loadPlan = (plan: TravelPlan) => {
+    setPlan(plan)
+    setDestination(plan.destination)
+    setDays(plan.days)
+    setBudget(plan.budget)
+    setPreferences(plan.preferences)
+    setShowHistory(false)
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {/* 历史记录按钮 */}
+      <div className="flex justify-between items-center mb-4">
+        <button
+          onClick={loadHistory}
+          className="text-sm text-blue-600 hover:text-blue-800 underline"
+        >
+          📋 历史记录
+        </button>
+        {showHistory && (
+          <button
+            onClick={() => setShowHistory(false)}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            关闭
+          </button>
+        )}
+      </div>
+
+      {/* 历史记录面板 */}
+      {showHistory && (
+        <div className="mb-6 bg-white rounded-lg shadow-md p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-semibold text-gray-800">历史记录</h3>
+            <button
+              onClick={clearHistory}
+              className="text-sm text-red-500 hover:text-red-700"
+            >
+              清空
+            </button>
+          </div>
+          {history.length === 0 ? (
+            <p className="text-gray-500 text-sm">暂无历史记录</p>
+          ) : (
+            <div className="space-y-2">
+              {history.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => loadPlan(item)}
+                  className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="font-medium">{item.destination}</span>
+                      <span className="text-sm text-gray-500 ml-2">
+                        {item.days}天 · {item.budget}元
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-400">
+                      {item.preferences.join('、')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 目的地 */}
         <div>
@@ -74,8 +164,21 @@ export default function TravelForm() {
             value={destination}
             onChange={e => setDestination(e.target.value)}
             placeholder="输入城市名称，如：北京、杭州、成都"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             required
+          />
+        </div>
+
+        {/* 出行日期 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            出行日期（可选，用于天气查询）
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -92,6 +195,10 @@ export default function TravelForm() {
             onChange={e => setDays(Number(e.target.value))}
             className="w-full"
           />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>1天</span>
+            <span>7天</span>
+          </div>
         </div>
 
         {/* 预算 */}
@@ -108,6 +215,10 @@ export default function TravelForm() {
             onChange={e => setBudget(Number(e.target.value))}
             className="w-full"
           />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>500元</span>
+            <span>10000元</span>
+          </div>
         </div>
 
         {/* 偏好 */}
@@ -121,10 +232,10 @@ export default function TravelForm() {
                 key={pref}
                 type="button"
                 onClick={() => togglePreference(pref)}
-                className={`px-4 py-2 rounded-full border transition-colors ${
+                className={`px-4 py-2 rounded-full border transition-all duration-200 ${
                   preferences.includes(pref)
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    ? 'bg-blue-500 text-white border-blue-500 shadow-md'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                 }`}
               >
                 {pref}
@@ -137,13 +248,23 @@ export default function TravelForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+          className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:bg-gray-400 transition-all duration-200 shadow-md hover:shadow-lg"
         >
-          {loading ? '正在生成旅行计划...' : '生成旅行计划'}
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              正在规划最优路线...
+            </span>
+          ) : (
+            '生成旅行计划'
+          )}
         </button>
 
         {error && (
-          <div className="p-4 bg-red-50 text-red-700 rounded-lg">
+          <div className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
             {error}
           </div>
         )}
