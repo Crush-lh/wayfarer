@@ -260,27 +260,28 @@ function estimateTime(type: string): string {
 }
 
 /**
- * 分配到每日
+ * 分配到每日（按地理位置聚类）
  */
 function assignToDays(pois: POI[], days: number, budget: number): DailyPlan[] {
-  const dailyBudget = budget / days
   const dailyPlans: DailyPlan[] = []
+  const dailyBudget = budget / days
+  const totalPOIs = pois.length
+  const poisPerDay = Math.ceil(totalPOIs / days)
 
-  // 按地理位置分组
-  const groups: POI[][] = []
-  const groupSize = Math.ceil(pois.length / days)
+  // 按地理位置聚类（简化版：按经纬度排序后分组）
+  const sortedPOIs = sortByLocation(pois)
   
-  for (let i = 0; i < days; i++) {
-    const start = i * groupSize
-    const end = start + groupSize
-    groups.push(pois.slice(start, end))
-  }
-
   for (let day = 0; day < days; day++) {
-    const dayPOIs = groups[day] || []
-    const morning = dayPOIs.slice(0, 2)
-    const afternoon = dayPOIs.slice(2, 4)
-    const evening = dayPOIs.slice(4, 5)
+    const start = day * poisPerDay
+    const end = Math.min(start + poisPerDay, totalPOIs)
+    const dayPOIs = sortedPOIs.slice(start, end)
+    
+    // 按地理位置排序（确保路线顺畅）
+    const route = optimizeRoute(dayPOIs)
+    
+    const morning = route.slice(0, 2)
+    const afternoon = route.slice(2, 4)
+    const evening = route.slice(4, 5)
 
     const totalCost = [...morning, ...afternoon, ...evening].reduce(
       (sum, poi) => sum + poi.cost, 0
@@ -297,6 +298,68 @@ function assignToDays(pois: POI[], days: number, budget: number): DailyPlan[] {
   }
 
   return dailyPlans
+}
+
+/**
+ * 按地理位置排序（简化：按经度排序，同经度按纬度排序）
+ */
+function sortByLocation(pois: POI[]): POI[] {
+  return pois.sort((a, b) => {
+    const [lngA, latA] = a.location.split(',').map(Number)
+    const [lngB, latB] = b.location.split(',').map(Number)
+    
+    if (Math.abs(lngA - lngB) > 0.01) {
+      return lngA - lngB
+    }
+    return latA - latB
+  })
+}
+
+/**
+ * 优化路线（最近邻算法，减少总距离）
+ */
+function optimizeRoute(pois: POI[]): POI[] {
+  if (pois.length <= 2) return pois
+  
+  const unvisited = [...pois]
+  const route: POI[] = []
+  
+  // 从第一个点开始
+  let current = unvisited.shift()!
+  route.push(current)
+  
+  while (unvisited.length > 0) {
+    let nearestIndex = 0
+    let minDistance = Infinity
+    
+    for (let i = 0; i < unvisited.length; i++) {
+      const dist = calculateDistance(current.location, unvisited[i].location)
+      if (dist < minDistance) {
+        minDistance = dist
+        nearestIndex = i
+      }
+    }
+    
+    current = unvisited.splice(nearestIndex, 1)[0]
+    route.push(current)
+  }
+  
+  return route
+}
+
+/**
+ * 计算两个经纬度点之间的距离（单位：米）
+ */
+function calculateDistance(loc1: string, loc2: string): number {
+  const [lng1, lat1] = loc1.split(',').map(Number)
+  const [lng2, lat2] = loc2.split(',').map(Number)
+  
+  // 简化版：欧氏距离（假设小范围内）
+  const R = 6371000 // 地球半径（米）
+  const x = (lng2 - lng1) * Math.cos((lat1 + lat2) / 2 * Math.PI / 180) * Math.PI / 180 * R
+  const y = (lat2 - lat1) * Math.PI / 180 * R
+  
+  return Math.sqrt(x * x + y * y)
 }
 
 /**
