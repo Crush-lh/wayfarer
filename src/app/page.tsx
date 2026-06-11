@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TravelForm from "@/components/TravelForm";
 import AuthStatus from "@/components/AuthStatus";
+import { FullPageLoading, SkeletonForm } from "@/components/ui/feedback";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -19,14 +21,7 @@ export default function Home() {
   }, [])
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🌍</div>
-          <div className="text-gray-600">加载中...</div>
-        </div>
-      </div>
-    )
+    return <FullPageLoading />
   }
 
   if (!isAuthenticated) {
@@ -93,7 +88,9 @@ export default function Home() {
         </div>
 
         {/* 表单 */}
-        <TravelForm />
+        <ErrorBoundary>
+          <TravelForm />
+        </ErrorBoundary>
       </div>
     </div>
   );

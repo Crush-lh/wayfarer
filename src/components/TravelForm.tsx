@@ -1,7 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { TravelPlan } from '@/lib/planner'
+import { useToast } from '@/components/Toast'
+import { SkeletonPlanView, EmptyState } from '@/components/ui/feedback'
+import { useRetry } from '@/components/ErrorBoundary'
 
 export default function TravelForm() {
   const [loading, setLoading] = useState(false)
@@ -9,6 +12,8 @@ export default function TravelForm() {
   const [error, setError] = useState('')
   const [history, setHistory] = useState<TravelPlan[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const { addToast } = useToast()
 
   const [destination, setDestination] = useState('')
   const [days, setDays] = useState(3)
@@ -53,8 +58,15 @@ export default function TravelForm() {
   const inputRef = useRef<HTMLInputElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // 表单验证
+    if (!destination.trim()) {
+      addToast('请选择目的地', 'warning')
+      return
+    }
+    
     setLoading(true)
     setError('')
     setPlan(null)
@@ -72,11 +84,13 @@ export default function TravelForm() {
       })
 
       if (!res.ok) {
-        throw new Error('生成失败')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || '生成失败')
       }
 
       const data = await res.json()
       setPlan(data)
+      addToast('旅行计划生成成功！', 'success')
       
       // 保存城市到最近搜索
       saveToRecent(destination)
@@ -88,11 +102,14 @@ export default function TravelForm() {
       localStorage.setItem('travelHistory', JSON.stringify(history.slice(0, 10)))
       setHistory(history.slice(0, 10))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败')
+      const errorMsg = err instanceof Error ? err.message : '生成失败'
+      setError(errorMsg)
+      addToast(errorMsg, 'error')
+      console.error('生成计划失败:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [destination, days, budget, preferences, addToast])
 
   // 加载最近搜索的城市
   useEffect(() => {
@@ -223,10 +240,12 @@ export default function TravelForm() {
   // 获取当前定位
   const getLocation = () => {
     if (!navigator.geolocation) {
-      alert('浏览器不支持定位')
+      addToast('浏览器不支持定位功能', 'error')
       return
     }
 
+    addToast('正在获取定位...', 'info')
+    
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
@@ -237,12 +256,13 @@ export default function TravelForm() {
           
           if (data.success && data.city) {
             selectCity(data.city)
+            addToast(`已定位到：${data.city}`, 'success')
           } else {
-            alert('定位失败：' + (data.error || '无法获取城市信息'))
+            addToast(data.error || '无法获取城市信息', 'warning')
           }
         } catch (e) {
           console.error('定位请求失败:', e)
-          alert('定位服务异常，请手动选择城市')
+          addToast('定位服务异常，请手动选择城市', 'error')
         }
       },
       (error) => {
@@ -258,7 +278,7 @@ export default function TravelForm() {
             msg = '定位超时'
             break
         }
-        alert(msg + '，请手动选择城市')
+        addToast(msg, 'error')
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     )
@@ -283,6 +303,7 @@ export default function TravelForm() {
   const clearHistory = () => {
     localStorage.removeItem('travelHistory')
     setHistory([])
+    addToast('历史记录已清空', 'success')
   }
 
   const loadPlan = (plan: TravelPlan) => {
@@ -718,10 +739,10 @@ export default function TravelForm() {
           {/* 提交按钮 */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !destination.trim()}
             className="w-full py-4 btn-gradient text-white rounded-xl font-bold text-lg
                        disabled:opacity-50 disabled:cursor-not-allowed
-                       transition-all duration-300"
+                       transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-3">
@@ -729,20 +750,36 @@ export default function TravelForm() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                正在规划最优路线...
+                <span className="animate-pulse">正在规划最优路线...</span>
               </span>
             ) : (
               '✨ 生成旅行计划'
             )}
           </button>
 
+          {/* 错误提示 */}
           {error && (
-            <div className="p-4 bg-red-50/80 text-red-700 rounded-xl border border-red-200/50">
-              {error}
+            <div className="p-4 bg-red-50/80 text-red-700 rounded-xl border border-red-200/50 flex items-start gap-3">
+              <span className="text-xl flex-shrink-0">⚠️</span>
+              <div className="flex-1">
+                <p className="font-medium">{error}</p>
+                <p className="text-sm mt-1 text-red-600/70">
+                  请检查网络连接后重试，或选择其他城市
+                </p>
+              </div>
+              <button 
+                onClick={() => setError('')}
+                className="text-red-400 hover:text-red-600 transition-colors"
+              >
+                ✕
+              </button>
             </div>
           )}
         </form>
       </div>
+
+      {/* 加载骨架屏 */}
+      {loading && !plan && <SkeletonPlanView />}
 
       {/* 结果展示 */}
       {plan && <TravelPlanView plan={plan} />}
