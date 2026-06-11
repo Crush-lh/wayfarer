@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { TravelPlan, POI, DailyPlan } from '@/lib/planner'
 import { useToast } from '@/components/Toast'
-import { SkeletonPlanView, EmptyState } from '@/components/ui/feedback'
-import { useRetry } from '@/components/ErrorBoundary'
+import { SkeletonPlanView } from '@/components/ui/feedback'
+import MapView from '@/components/MapView'
 
 export default function TravelForm() {
   const [loading, setLoading] = useState(false)
@@ -793,6 +793,7 @@ function TravelPlanView({ plan, onUpdate }: { plan: TravelPlan; onUpdate?: (plan
   const [draggedItem, setDraggedItem] = useState<{dayIndex: number; slot: string; poiIndex: number} | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addTarget, setAddTarget] = useState<{dayIndex: number; slot: string} | null>(null)
+  const [mapModeDay, setMapModeDay] = useState<number | null>(null)
   const { addToast } = useToast()
 
   // 当外部 plan 变化时更新
@@ -1064,10 +1065,32 @@ function TravelPlanView({ plan, onUpdate }: { plan: TravelPlan; onUpdate?: (plan
                 <h4 className="font-bold text-lg gradient-text">
                   Day {daily.day}：{getDayTheme(daily.day, displayPlan.days)}
                 </h4>
-                <span className="text-sm text-gray-500 bg-white/60 px-3 py-1 rounded-full">
-                  预计花费：{daily.costs.total} 元
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setMapModeDay(mapModeDay === daily.day ? null : daily.day)}
+                    className="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded-full transition-colors"
+                  >
+                    {mapModeDay === daily.day ? '✕ 关闭地图' : '🗺️ 地图模式'}
+                  </button>
+                  <span className="text-sm text-gray-500 bg-white/60 px-3 py-1 rounded-full">
+                    预计花费：{daily.costs.total} 元
+                  </span>
+                </div>
               </div>
+
+              {/* 地图模式 */}
+              {mapModeDay === daily.day && (
+                <div className="mb-4 animate-fade-in-up">
+                  <MapView
+                    pois={[
+                      ...daily.morning.map((p, i) => ({ ...p, timeSlot: '上午', index: i })),
+                      ...daily.afternoon.map((p, i) => ({ ...p, timeSlot: '下午', index: i + daily.morning.length })),
+                      ...daily.evening.map((p, i) => ({ ...p, timeSlot: '晚上', index: i + daily.morning.length + daily.afternoon.length })),
+                    ]}
+                    city={displayPlan.destination}
+                  />
+                </div>
+              )}
 
               {/* 天气联动提示 */}
               {daily.weather?.type === 'rain' && (
