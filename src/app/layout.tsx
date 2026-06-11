@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Wayfarer - 旅行计划助手",
+  title: "旅行计划助手 - 智能规划你的旅程",
   description: "输入目的地，自动生成旅行计划",
 };
 

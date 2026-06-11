@@ -35,12 +35,25 @@ export async function getCachedAttractions(city: string, preferences: string[]) 
  * 保存景点到 Supabase（缓存）
  */
 export async function saveAttractions(attractions: any[]) {
-  const { error } = await supabase
-    .from('attractions')
-    .upsert(attractions, { onConflict: 'name,city' })
-
-  if (error) {
-    console.error('保存景点失败:', error)
+  // 先检查每个景点是否已存在
+  for (const attraction of attractions) {
+    const { data: existing } = await supabase
+      .from('attractions')
+      .select('id')
+      .eq('name', attraction.name)
+      .eq('city', attraction.city)
+      .single()
+    
+    if (!existing) {
+      // 不存在则插入
+      const { error } = await supabase
+        .from('attractions')
+        .insert(attraction)
+      
+      if (error) {
+        console.error(`保存景点 ${attraction.name} 失败:`, error)
+      }
+    }
   }
 }
 

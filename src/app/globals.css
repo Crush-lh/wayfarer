@@ -6,8 +6,75 @@
 }
 
 body {
-  background-color: #f9fafb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
   color: #1f2937;
+}
+
+/* 玻璃拟态卡片 */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+}
+
+.glass-card-dark {
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* 渐变文字 */
+.gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* 悬停效果 */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(31, 38, 135, 0.2);
 }
 
 /* 自定义滚动条 */
@@ -16,16 +83,17 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 滑块样式 */
@@ -33,7 +101,7 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   height: 6px;
-  background: #e5e7eb;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   border-radius: 3px;
   outline: none;
 }
@@ -41,18 +109,84 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
-  background: #3b82f6;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  border: 2px solid white;
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  background: #3b82f6;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
   cursor: pointer;
-  border: none;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+/* 按钮渐变 */
+.btn-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+/* 偏好标签 */
+.pref-tag {
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.pref-tag:hover {
+  transform: scale(1.05);
+}
+
+.pref-tag.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+/* 加载动画 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* 天气卡片 */
+.weather-card {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+/* 行程卡片 */
+.day-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  border-left: 4px solid #667eea;
+}
+
+/* POI 卡片 */
+.poi-card {
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s ease;
+}
+
+.poi-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }

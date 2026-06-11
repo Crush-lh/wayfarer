@@ -12,18 +12,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    console.log('开始生成计划:', { destination, days, budget, preferences })
+    const start = Date.now()
     const plan = await generateTravelPlan(
       destination,
       Number(days),
       Number(budget),
       preferences || []
     )
+    console.log('计划生成成功，耗时:', Date.now() - start, 'ms')
 
     return NextResponse.json(plan)
-  } catch (error) {
+  } catch (error: any) {
     console.error('生成旅行计划失败:', error)
     return NextResponse.json(
-      { error: '生成失败，请稍后重试' },
+      { 
+        error: '生成失败，请稍后重试',
+        details: error.message || String(error),
+      },
       { status: 500 }
     )
   }
