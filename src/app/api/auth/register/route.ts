@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,11 +28,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 检查用户名是否已存在
-    const { data: existing } = await supabase
+    const { data: existing } = await supabaseAdmin
       .from('users')
       .select('id')
       .eq('username', username)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json(
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 10)
 
     // 插入用户
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('users')
       .insert({
         username,

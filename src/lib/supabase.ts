@@ -5,6 +5,12 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
+// 服务端专用：使用 service_role key，不受 RLS 限制
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseKey
+export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false }
+})
+
 /**
  * 从 Supabase 获取景点（缓存）
  */

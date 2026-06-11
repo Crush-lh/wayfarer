@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
 const ADMIN_PASS = process.env.ADMIN_PASS || 'admin123'
@@ -27,11 +27,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 查询数据库用户
-    const { data: user } = await supabase
+    const { data: user } = await supabaseAdmin
       .from('users')
       .select('*')
       .eq('username', username)
-      .single()
+      .maybeSingle()
 
     if (!user) {
       return NextResponse.json(
