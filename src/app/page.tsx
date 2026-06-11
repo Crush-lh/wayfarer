@@ -1,9 +1,68 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import TravelForm from "@/components/TravelForm";
+import AuthStatus from "@/components/AuthStatus";
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+
+  useEffect(() => {
+    const token = localStorage.getItem('wayfarer_token')
+    if (token) {
+      setIsAuthenticated(true)
+    }
+    setLoading(false)
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🌍</div>
+          <div className="text-gray-600">加载中...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-8 px-4">
+        <div className="w-full max-w-md">
+          <div className="glass-card rounded-2xl p-8 text-center animate-fade-in-up">
+            <span className="text-5xl">🔐</span>
+            <h1 className="text-3xl font-bold gradient-text mt-4 mb-3">
+              需要登录
+            </h1>
+            <p className="text-gray-600 mb-6">
+              请登录后使用旅行计划助手
+            </p>
+            <div className="space-y-3">
+              <a
+                href="/login"
+                className="block w-full py-3 btn-gradient text-white rounded-xl font-bold transition-all"
+              >
+                🔐 前往登录
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-4xl mx-auto">
+        {/* 顶部导航栏 */}
+        <div className="flex justify-end mb-4">
+          <AuthStatus />
+        </div>
+
         {/* 头部 - 玻璃拟态效果 */}
         <div className="glass-card rounded-2xl p-8 mb-8 animate-fade-in-up">
           <div className="text-center">
