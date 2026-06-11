@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { TravelPlan } from '@/lib/planner'
+import { TravelPlan, POI, DailyPlan } from '@/lib/planner'
 import { useToast } from '@/components/Toast'
 import { SkeletonPlanView, EmptyState } from '@/components/ui/feedback'
 import { useRetry } from '@/components/ErrorBoundary'
@@ -782,53 +782,191 @@ export default function TravelForm() {
       {loading && !plan && <SkeletonPlanView />}
 
       {/* 结果展示 */}
-      {plan && <TravelPlanView plan={plan} />}
+      {plan && <TravelPlanView plan={plan} onUpdate={updatedPlan => { setPlan(updatedPlan); addToast('行程已更新', 'success') }} />}
     </div>
   )
 }
 
-function TravelPlanView({ plan }: { plan: TravelPlan }) {
+function TravelPlanView({ plan, onUpdate }: { plan: TravelPlan; onUpdate?: (plan: TravelPlan) => void }) {
+  const [editMode, setEditMode] = useState(false)
+  const [editingPlan, setEditingPlan] = useState(plan)
+  const [draggedItem, setDraggedItem] = useState<{dayIndex: number; slot: string; poiIndex: number} | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addTarget, setAddTarget] = useState<{dayIndex: number; slot: string} | null>(null)
+  const { addToast } = useToast()
+
+  // 当外部 plan 变化时更新
+  useEffect(() => {
+    setEditingPlan(plan)
+  }, [plan])
+
+  // 切换编辑模式
+  const toggleEditMode = () => {
+    if (editMode) {
+      // 退出编辑模式，保存
+      if (onUpdate) {
+        onUpdate(editingPlan)
+      }
+      addToast('行程已保存', 'success')
+    }
+    setEditMode(!editMode)
+  }
+
+  // 删除景点
+  const removePOI = (dayIndex: number, slot: 'morning' | 'afternoon' | 'evening', poiIndex: number) => {
+    const newPlan = { ...editingPlan }
+    const newDaily = [...newPlan.dailyPlans]
+    const day = { ...newDaily[dayIndex] }
+    const slotItems = [...day[slot]]
+    
+    slotItems.splice(poiIndex, 1)
+    day[slot] = slotItems
+    newDaily[dayIndex] = day
+    newPlan.dailyPlans = newDaily
+    
+    setEditingPlan(newPlan)
+    addToast('景点已删除', 'success')
+  }
+
+  // 拖拽开始
+  const handleDragStart = (dayIndex: number, slot: string, poiIndex: number) => {
+    setDraggedItem({ dayIndex, slot, poiIndex })
+  }
+
+  // 拖拽结束
+  const handleDragOver = (e: React.DragEvent, dayIndex: number, slot: string, poiIndex: number) => {
+    e.preventDefault()
+  }
+
+  // 放置
+  const handleDrop = (e: React.DragEvent, targetDayIndex: number, targetSlot: string, targetPoiIndex: number) => {
+    e.preventDefault()
+    if (!draggedItem) return
+
+    const { dayIndex: srcDayIndex, slot: srcSlot, poiIndex: srcPoiIndex } = draggedItem
+    
+    if (srcDayIndex === targetDayIndex && srcSlot === targetSlot && srcPoiIndex === targetPoiIndex) {
+      setDraggedItem(null)
+      return
+    }
+
+    const newPlan = { ...editingPlan }
+    const newDaily = [...newPlan.dailyPlans]
+    
+    // 获取源数据
+    const srcDay = { ...newDaily[srcDayIndex] }
+    const srcSlotItems = [...srcDay[srcSlot as keyof DailyPlan] as POI[]]
+    const [movedPOI] = srcSlotItems.splice(srcPoiIndex, 1)
+    srcDay[srcSlot as keyof DailyPlan] = srcSlotItems as any
+    newDaily[srcDayIndex] = srcDay
+
+    // 插入目标位置
+    const targetDay = { ...newDaily[targetDayIndex] }
+    const targetSlotItems = [...targetDay[targetSlot as keyof DailyPlan] as POI[]]
+    targetSlotItems.splice(targetPoiIndex, 0, movedPOI)
+    targetDay[targetSlot as keyof DailyPlan] = targetSlotItems as any
+    newDaily[targetDayIndex] = targetDay
+
+    newPlan.dailyPlans = newDaily
+    setEditingPlan(newPlan)
+    setDraggedItem(null)
+    addToast('景点已调整', 'success')
+  }
+
+  // 添加自定义景点
+  const addCustomPOI = (dayIndex: number, slot: 'morning' | 'afternoon' | 'evening', poiName: string) => {
+    const newPOI: POI = {
+      name: poiName,
+      address: '自定义景点',
+      location: '0,0',
+      type: '自定义',
+      rating: '5.0',
+      cost: 0,
+      timeNeeded: '1-2小时',
+      description: '用户自定义添加的景点',
+    }
+
+    const newPlan = { ...editingPlan }
+    const newDaily = [...newPlan.dailyPlans]
+    const day = { ...newDaily[dayIndex] }
+    const slotItems = [...day[slot]]
+    
+    slotItems.push(newPOI)
+    day[slot] = slotItems
+    newDaily[dayIndex] = day
+    newPlan.dailyPlans = newDaily
+    
+    setEditingPlan(newPlan)
+    setShowAddModal(false)
+    setAddTarget(null)
+    addToast(`已添加景点：${poiName}`, 'success')
+  }
+
+  const displayPlan = editMode ? editingPlan : plan
+
   return (
     <div className="mt-8 space-y-6 animate-fade-in-up">
       <div className="glass-card rounded-2xl p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">🗺️</span>
-          <h2 className="text-2xl font-bold gradient-text">
-            {plan.destination} 旅行计划
-          </h2>
+        {/* 头部 + 编辑按钮 */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🗺️</span>
+            <h2 className="text-2xl font-bold gradient-text">
+              {displayPlan.destination} 旅行计划
+            </h2>
+          </div>
+          <button
+            onClick={toggleEditMode}
+            className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
+              editMode
+                ? 'bg-green-500 text-white hover:bg-green-600'
+                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+            }`}
+          >
+            {editMode ? '✅ 保存行程' : '✏️ 调整行程'}
+          </button>
         </div>
+
+        {editMode && (
+          <div className="mb-6 p-4 bg-blue-50/80 rounded-xl border border-blue-200/50">
+            <div className="text-sm text-blue-700 flex items-center gap-2">
+              <span>💡</span>
+              <span>拖拽景点可调整顺序，点击 🗑️ 删除，点击 ➕ 添加新景点</span>
+            </div>
+          </div>
+        )}
 
         {/* 基本信息 */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="weather-card p-5 rounded-xl text-center">
             <div className="text-sm text-gray-600 mb-1">天数</div>
-            <div className="text-3xl font-bold gradient-text">{plan.days} 天</div>
+            <div className="text-3xl font-bold gradient-text">{displayPlan.days} 天</div>
           </div>
           <div className="weather-card p-5 rounded-xl text-center">
             <div className="text-sm text-gray-600 mb-1">总预算</div>
-            <div className="text-3xl font-bold gradient-text">{plan.budget} 元</div>
+            <div className="text-3xl font-bold gradient-text">{displayPlan.budget} 元</div>
           </div>
           <div className="weather-card p-5 rounded-xl text-center">
             <div className="text-sm text-gray-600 mb-1">偏好</div>
             <div className="text-sm font-medium text-gray-700">
-              {plan.preferences.join('、') || '未选择'}
+              {displayPlan.preferences.join('、') || '未选择'}
             </div>
           </div>
         </div>
 
         {/* 预算明细 */}
-        {plan.budgetBreakdown && (
+        {displayPlan.budgetBreakdown && (
           <div className="mb-6 bg-white/60 rounded-xl p-5 border border-gray-100/50">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-2xl">💰</span> 预算分配
             </h3>
             <div className="grid grid-cols-5 gap-3">
               {[
-                { label: '往返交通', value: plan.budgetBreakdown.transport, icon: '🚄', color: 'text-blue-600', bg: 'bg-blue-50' },
-                { label: '住宿', value: plan.budgetBreakdown.accommodation, icon: '🏨', color: 'text-purple-600', bg: 'bg-purple-50' },
-                { label: '餐饮', value: plan.budgetBreakdown.food, icon: '🍜', color: 'text-orange-600', bg: 'bg-orange-50' },
-                { label: '景点门票', value: plan.budgetBreakdown.tickets, icon: '🎫', color: 'text-green-600', bg: 'bg-green-50' },
-                { label: '其他/应急', value: plan.budgetBreakdown.other, icon: '🛍️', color: 'text-gray-600', bg: 'bg-gray-50' },
+                { label: '往返交通', value: displayPlan.budgetBreakdown.transport, icon: '🚄', color: 'text-blue-600', bg: 'bg-blue-50' },
+                { label: '住宿', value: displayPlan.budgetBreakdown.accommodation, icon: '🏨', color: 'text-purple-600', bg: 'bg-purple-50' },
+                { label: '餐饮', value: displayPlan.budgetBreakdown.food, icon: '🍜', color: 'text-orange-600', bg: 'bg-orange-50' },
+                { label: '景点门票', value: displayPlan.budgetBreakdown.tickets, icon: '🎫', color: 'text-green-600', bg: 'bg-green-50' },
+                { label: '其他/应急', value: displayPlan.budgetBreakdown.other, icon: '🛍️', color: 'text-gray-600', bg: 'bg-gray-50' },
               ].map((item, i) => (
                 <div key={i} className={`${item.bg} rounded-xl p-3 text-center`}>
                   <div className="text-xl mb-1">{item.icon}</div>
@@ -838,19 +976,19 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
               ))}
             </div>
             <div className="mt-3 text-xs text-gray-500 text-center">
-              共 {plan.budgetBreakdown.total} 元 · 已分配 {plan.budgetBreakdown.transport + plan.budgetBreakdown.accommodation + plan.budgetBreakdown.food + plan.budgetBreakdown.tickets + plan.budgetBreakdown.other} 元
+              共 {displayPlan.budgetBreakdown.total} 元 · 已分配 {displayPlan.budgetBreakdown.transport + displayPlan.budgetBreakdown.accommodation + displayPlan.budgetBreakdown.food + displayPlan.budgetBreakdown.tickets + displayPlan.budgetBreakdown.other} 元
             </div>
           </div>
         )}
 
         {/* 天气 */}
-        {plan.weather?.forecasts?.[0]?.casts && (
+        {displayPlan.weather?.forecasts?.[0]?.casts && (
           <div className="mb-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-2xl">🌤</span> 天气预报
             </h3>
             <div className="grid grid-cols-3 gap-4">
-              {plan.weather.forecasts[0].casts.slice(0, 3).map((cast: any, i: number) => (
+              {displayPlan.weather.forecasts[0].casts.slice(0, 3).map((cast: any, i: number) => (
                 <div key={i} className="weather-card p-4 rounded-xl text-center">
                   <div className="text-sm text-gray-500 mb-2">第 {i + 1} 天</div>
                   <div className="text-2xl mb-1">{getWeatherEmoji(cast.dayweather)}</div>
@@ -863,7 +1001,7 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
         )}
 
         {/* 酒店推荐 */}
-        {plan.hotel && (
+        {displayPlan.hotel && (
           <div className="mb-6 bg-white/60 rounded-xl p-5 border border-gray-100/50">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-2xl">🏨</span> 住宿推荐
@@ -872,13 +1010,13 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
               <div className="text-4xl">🏨</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-gray-800">{plan.hotel.name}</span>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{plan.hotel.type}</span>
-                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⭐ {plan.hotel.rating}</span>
+                  <span className="font-bold text-gray-800">{displayPlan.hotel.name}</span>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{displayPlan.hotel.type}</span>
+                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⭐ {displayPlan.hotel.rating}</span>
                 </div>
-                <div className="text-sm text-gray-500">{plan.hotel.address}</div>
+                <div className="text-sm text-gray-500">{displayPlan.hotel.address}</div>
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {plan.hotel.tags.map((tag, i) => (
+                  {displayPlan.hotel.tags.map((tag, i) => (
                     <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{tag}</span>
                   ))}
                 </div>
@@ -888,13 +1026,13 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
         )}
 
         {/* 餐厅推荐 */}
-        {plan.restaurants && plan.restaurants.length > 0 && (
+        {displayPlan.restaurants && displayPlan.restaurants.length > 0 && (
           <div className="mb-6 bg-white/60 rounded-xl p-5 border border-gray-100/50">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-2xl">🍜</span> 美食推荐
             </h3>
             <div className="space-y-3">
-              {plan.restaurants.map((restaurant, i) => (
+              {displayPlan.restaurants.map((restaurant, i) => (
                 <div key={i} className="flex items-center gap-4 p-4 bg-white/80 rounded-xl border border-gray-100/50">
                   <div className="text-3xl">🍽️</div>
                   <div className="flex-1">
@@ -915,19 +1053,19 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
           </div>
         )}
 
-        {/* 每日行程 - 攻略格式 */}
+        {/* 每日行程 - 可编辑 */}
         <div className="space-y-6">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <span className="text-2xl">📅</span> 每日行程
           </h3>
-          {plan.dailyPlans.map((daily) => (
+          {displayPlan.dailyPlans.map((daily, dayIndex) => (
             <div key={daily.day} className="day-card rounded-xl p-6 hover-lift">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-bold text-lg gradient-text">
-                  Day {daily.day}：{getDayTheme(daily.day, plan.days)}
+                  Day {daily.day}：{getDayTheme(daily.day, displayPlan.days)}
                 </h4>
                 <span className="text-sm text-gray-500 bg-white/60 px-3 py-1 rounded-full">
-                  预计花费：{daily.costs.total} 元（住宿 {daily.costs.accommodation} · 餐饮 {daily.costs.food} · 门票 {daily.costs.tickets} · 交通 {daily.costs.transport} · 其他 {daily.costs.other}）
+                  预计花费：{daily.costs.total} 元
                 </span>
               </div>
 
@@ -942,14 +1080,57 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
               )}
 
               <div className="space-y-5">
-                {daily.morning.length > 0 && (
-                  <TimeSlotSection title="上午 ☀️" pois={daily.morning} />
-                )}
-                {daily.afternoon.length > 0 && (
-                  <TimeSlotSection title="下午 🌤️" pois={daily.afternoon} />
-                )}
-                {daily.evening.length > 0 && (
-                  <TimeSlotSection title="晚上 🌙" pois={daily.evening} />
+                {editMode ? (
+                  <>
+                    <EditableTimeSlotSection
+                      title="上午 ☀️"
+                      pois={daily.morning}
+                      dayIndex={dayIndex}
+                      slot="morning"
+                      editMode={editMode}
+                      onRemove={removePOI}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onAdd={() => { setAddTarget({ dayIndex, slot: 'morning' }); setShowAddModal(true) }}
+                    />
+                    <EditableTimeSlotSection
+                      title="下午 🌤️"
+                      pois={daily.afternoon}
+                      dayIndex={dayIndex}
+                      slot="afternoon"
+                      editMode={editMode}
+                      onRemove={removePOI}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onAdd={() => { setAddTarget({ dayIndex, slot: 'afternoon' }); setShowAddModal(true) }}
+                    />
+                    <EditableTimeSlotSection
+                      title="晚上 🌙"
+                      pois={daily.evening}
+                      dayIndex={dayIndex}
+                      slot="evening"
+                      editMode={editMode}
+                      onRemove={removePOI}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onAdd={() => { setAddTarget({ dayIndex, slot: 'evening' }); setShowAddModal(true) }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {daily.morning.length > 0 && (
+                      <TimeSlotSection title="上午 ☀️" pois={daily.morning} />
+                    )}
+                    {daily.afternoon.length > 0 && (
+                      <TimeSlotSection title="下午 🌤️" pois={daily.afternoon} />
+                    )}
+                    {daily.evening.length > 0 && (
+                      <TimeSlotSection title="晚上 🌙" pois={daily.evening} />
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -957,19 +1138,179 @@ function TravelPlanView({ plan }: { plan: TravelPlan }) {
         </div>
 
         {/* 旅行建议 */}
-        {plan.tips.length > 0 && (
+        {displayPlan.tips.length > 0 && (
           <div className="mt-6 bg-gradient-to-r from-yellow-50/80 to-orange-50/80 p-6 rounded-xl border border-yellow-200/30">
             <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <span className="text-2xl">💡</span> 旅行建议
             </h3>
             <ul className="space-y-2">
-              {plan.tips.map((tip, i) => (
+              {displayPlan.tips.map((tip, i) => (
                 <li key={i} className="text-sm text-gray-700 flex items-start">
                   <span className="mr-2 text-yellow-500">✦</span>
                   {tip}
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 添加自定义景点弹窗 */}
+      {showAddModal && addTarget && (
+        <AddCustomPOIModal
+          onAdd={(name) => addCustomPOI(addTarget.dayIndex, addTarget.slot as 'morning' | 'afternoon' | 'evening', name)}
+          onClose={() => { setShowAddModal(false); setAddTarget(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddCustomPOIModal({ onAdd, onClose }: { onAdd: (name: string) => void; onClose: () => void }) {
+  const [name, setName] = useState('')
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="glass-card rounded-2xl p-6 w-full max-w-md animate-scale-in"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <span>➕</span> 添加自定义景点
+        </h3>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="输入景点名称"
+          className="w-full px-4 py-3 bg-white/80 border border-gray-200 rounded-xl mb-4 focus:ring-2 focus:ring-purple-500 outline-none"
+          autoFocus
+          onKeyDown={e => {
+            if (e.key === 'Enter' && name.trim()) {
+              onAdd(name.trim())
+            }
+            if (e.key === 'Escape') {
+              onClose()
+            }
+          }}
+        />
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => name.trim() && onAdd(name.trim())}
+            disabled={!name.trim()}
+            className="px-4 py-2 btn-gradient text-white rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+          >
+            添加
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditableTimeSlotSection({
+  title,
+  pois,
+  dayIndex,
+  slot,
+  editMode,
+  onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onAdd
+}: {
+  title: string
+  pois: POI[]
+  dayIndex: number
+  slot: string
+  editMode: boolean
+  onRemove: (dayIndex: number, slot: 'morning' | 'afternoon' | 'evening', poiIndex: number) => void
+  onDragStart: (dayIndex: number, slot: string, poiIndex: number) => void
+  onDragOver: (e: React.DragEvent, dayIndex: number, slot: string, poiIndex: number) => void
+  onDrop: (e: React.DragEvent, dayIndex: number, slot: string, poiIndex: number) => void
+  onAdd: () => void
+}) {
+  if (!editMode && pois.length === 0) return null
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium text-gray-600">{title}</div>
+        {editMode && (
+          <button
+            onClick={onAdd}
+            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 py-1 rounded-full transition-colors"
+          >
+            ➕ 添加
+          </button>
+        )}
+      </div>
+      <div className="space-y-3">
+        {pois.map((poi, i) => (
+          <div
+            key={`${dayIndex}-${slot}-${i}-${poi.name}`}
+            draggable={editMode}
+            onDragStart={() => onDragStart(dayIndex, slot, i)}
+            onDragOver={(e) => onDragOver(e, dayIndex, slot, i)}
+            onDrop={(e) => onDrop(e, dayIndex, slot, i)}
+            className={`poi-card p-4 rounded-xl border border-gray-100/50 ${
+              editMode ? 'cursor-move hover:shadow-lg transition-all' : ''
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              {editMode && (
+                <div className="text-gray-400 mt-1 cursor-grab active:cursor-grabbing">
+                  ⋮⋮
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-gray-800 text-lg">{poi.name}</div>
+                  {editMode && (
+                    <button
+                      onClick={() => onRemove(dayIndex, slot as 'morning' | 'afternoon' | 'evening', i)}
+                      className="text-red-400 hover:text-red-600 transition-colors text-sm"
+                      title="删除"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
+                
+                {poi.description && (
+                  <div className="text-sm text-gray-600 mt-2 leading-relaxed">{poi.description}</div>
+                )}
+                <div className="text-sm text-gray-500 mt-2">{poi.address}</div>
+                <div className="flex items-center gap-3 mt-3 text-sm">
+                  <span className="flex items-center gap-1 text-orange-500">
+                    <span>⭐</span>
+                    <span className="font-medium">{poi.rating}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-gray-600">
+                    <span>⏱</span>
+                    <span>{poi.timeNeeded}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-green-600">
+                    <span>💰</span>
+                    <span className="font-medium">{poi.cost} 元</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {editMode && pois.length === 0 && (
+          <div className="p-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
+            <span className="text-sm text-gray-400">暂无景点，点击「添加」按钮</span>
           </div>
         )}
       </div>
